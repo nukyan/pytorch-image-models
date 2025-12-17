@@ -610,7 +610,6 @@ class EfficientFormerV2(nn.Module):
     ):
         super().__init__()
         dd = {'device': device, 'dtype': dtype}
-        assert global_pool in ('avg', '')
         self.num_classes = num_classes
         self.feature_info = []
         img_size = to_2tuple(img_size)
@@ -658,12 +657,9 @@ class EfficientFormerV2(nn.Module):
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
         self.norm = norm_layer(embed_dims[-1], **dd)
         self.head_drop = nn.Dropout(drop_rate)
-        self.head = nn.Linear(embed_dims[-1], num_classes, **dd) if num_classes > 0 else nn.Identity()
-        self.dist = distillation
-        if self.dist:
-            self.head_dist = nn.Linear(embed_dims[-1], num_classes, **dd) if num_classes > 0 else nn.Identity()
-        else:
-            self.head_dist = None
+        num_pooled_features = self.num_features * self.global_pool.feat_mult()
+        self.head = nn.Linear(num_pooled_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.head_dist = nn.Linear(num_pooled_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
 
         self.apply(self.init_weights)
         self.distilled_training = False
@@ -699,8 +695,10 @@ class EfficientFormerV2(nn.Module):
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
-        self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
-        self.head_dist = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        device, dtype = self.head.weight.device, self.head.weight.dtype if hasattr(self.head, 'weight') else (None, None)
+        num_pooled_features = self.num_features * self.global_pool.feat_mult()
+        self.head = nn.Linear(num_pooled_features, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
+        self.head_dist = nn.Linear(num_pooled_features, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
 
     @torch.jit.ignore
     def set_distilled_training(self, enable=True):

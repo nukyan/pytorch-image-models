@@ -409,13 +409,14 @@ class SwiftFormer(nn.Module):
         self.stages = nn.Sequential(*stages)
 
         # Classifier head
-        self.num_features  = self.head_hidden_size = out_chs = embed_dims[-1]
+        self.num_features  = self.head_hidden_size = embed_dims[-1]
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
         self.norm = nn.BatchNorm2d(out_chs, **dd)
         self.head_drop = nn.Dropout(drop_rate)
-        self.head = Linear(out_chs, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        num_pooled_features = self.num_features * self.global_pool.feat_mult()
+        self.head = Linear(num_pooled_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
         # assuming model is always distilled (valid for current checkpoints, will split def if that changes)
-        self.head_dist = Linear(out_chs, num_classes, **dd) if num_classes > 0 else nn.Identity()
+        self.head_dist = Linear(num_pooled_features, num_classes, **dd) if num_classes > 0 else nn.Identity()
         self.distilled_training = False  # must set this True to train w/ distillation token
         self._initialize_weights()
 
@@ -459,8 +460,9 @@ class SwiftFormer(nn.Module):
         self.num_classes = num_classes
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
         device, dtype = self.head.weight.device, self.head.weight.dtype if hasattr(self.head, 'weight') else (None, None)
-        self.head = Linear(self.num_features, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
-        self.head_dist = Linear(self.num_features, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
+        num_pooled_features = self.num_features * self.global_pool.feat_mult()
+        self.head = Linear(num_pooled_features, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
+        self.head_dist = Linear(num_pooled_features, num_classes, device=device, dtype=dtype) if num_classes > 0 else nn.Identity()
 
     @torch.jit.ignore
     def set_distilled_training(self, enable: bool = True):

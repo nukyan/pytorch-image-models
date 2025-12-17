@@ -426,7 +426,8 @@ class RepVit(nn.Module):
         self.num_features = self.head_hidden_size = embed_dim[-1]
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
         self.head_drop = nn.Dropout(drop_rate)
-        self.head = RepVitClassifier(embed_dim[-1], num_classes, distillation, **dd)
+        num_pooled_features = self.num_features * self.global_pool.feat_mult()
+        self.head = RepVitClassifier(num_pooled_features, num_classes, distillation, **dd)
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
@@ -445,7 +446,8 @@ class RepVit(nn.Module):
         self.num_classes = num_classes
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
         dd = {'device': device, 'dtype': dtype}
-        self.head = RepVitClassifier(self.embed_dim[-1], num_classes, distillation, **dd)
+        num_pooled_features = self.num_features * self.global_pool.feat_mult()
+        self.head = RepVitClassifier(num_pooled_features, num_classes, distillation, **dd)
 
     @torch.jit.ignore
     def set_distilled_training(self, enable=True):
